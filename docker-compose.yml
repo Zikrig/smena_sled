@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  smena-sled-bot:
+    build: .
+    container_name: smena-sled-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - smena-sled-network
+
+networks:
+  smena-sled-network:
+    driver: bridge
