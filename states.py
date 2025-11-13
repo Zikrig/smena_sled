@@ -21,3 +21,7 @@ class Form(StatesGroup):
     # Состояния для экстренных вызовов
     emergency_type = State()
     emergency_description = State()
+    
+    # Состояния для проверки поста
+    post_check_location = State()
+    post_check_video = State()

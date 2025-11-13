@@ -17,7 +17,8 @@ LOCATIONS = [
 
 # Номера экстренных служб
 EMERGENCY_NUMBERS = {
-    "fire_service": "101 - Пожарная служба",
-    "ora_duty": "102 - Дежурная часть ОРА", 
-    "security_chief": "103 - Начальник охраны"
+    "fire_service": "101",
+    "ora_duty": "79213092735",
+    "security_chief_lo": "89213173079",
+    "security_chief_spb": "89213666399"
 }

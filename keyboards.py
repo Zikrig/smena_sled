@@ -22,9 +22,10 @@ def get_main_inline_keyboard():
     builder.button(text="📋 Передача ТМЦ", callback_data="transfer_tmc")
     builder.button(text="🚶 Обход", callback_data="patrol")
     builder.button(text="🔍 Осмотр", callback_data="inspection")
-    builder.button(text="⚠️ Проблема", callback_data="problem")
-    builder.button(text="🚨 Экстренный вызов", callback_data="emergency")
-    builder.adjust(2, 2, 2)
+    builder.button(text="✅ Проверка поста", callback_data="post_check")
+    builder.button(text="💬 Сообщение", callback_data="problem")
+    builder.button(text="🚨 Вызов", callback_data="emergency")
+    builder.adjust(2, 2, 1, 2)
     return builder.as_markup()
 
 def get_cancel_keyboard():
@@ -50,9 +51,10 @@ def get_emergency_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="🚒 Пожарная служба", callback_data="fire_service")
     builder.button(text="📞 Дежурная часть ОРА", callback_data="ora_duty")
-    builder.button(text="👨‍💼 Начальник охраны", callback_data="security_chief")
+    builder.button(text="👨‍💼 Начальник охраны в ЛО", callback_data="security_chief_lo")
+    builder.button(text="👨‍💼 Начальник охраны в СПб", callback_data="security_chief_spb")
     builder.button(text="❌ Отмена", callback_data="cancel_action")
-    builder.adjust(1, 1, 1, 1)
+    builder.adjust(1, 1, 1, 1, 1)
     return builder.as_markup()
 
 def get_problem_type_keyboard():

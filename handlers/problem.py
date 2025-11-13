@@ -13,83 +13,132 @@ router = Router()
 async def handle_problem(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Form.problem_description)
     await callback.message.edit_text(
-        "⚠️ <b>Сообщение о проблеме</b>\n\n"
-        "Опишите проблему или неисправность:\n"
-        "• 📹 Камеры наблюдения\n"
-        "• 🚧 Шлагбаум\n"
-        "• 🖥️ Монитор\n"
-        "• 📡 Датчики\n"
-        "• 🔧 Другое оборудование",
+        "💬 <b>Сообщение</b>\n\n"
+        "Напишите, запишите голосовое сообщение или пришлите фото, о чем желаете сообщить.",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_keyboard()
     )
     await callback.answer()
 
-@router.message(Form.problem_description, F.text)
-async def handle_problem_description(message: Message, state: FSMContext):
-    await state.update_data(description=message.text)
-    await state.set_state(Form.problem_photo)
-    
-    await message.answer(
-        "📸 Отправьте фото неисправности (или нажмите 'Пропустить'):",
-        reply_markup=get_cancel_keyboard()
-    )
-
-@router.message(Form.problem_photo, F.photo)
-async def handle_problem_photo(message: Message, state: FSMContext):
-    data = await state.get_data()
-    description = data["description"]
+@router.message(Form.problem_description)
+async def handle_problem_message(message: Message, state: FSMContext):
     current_time = datetime.now().strftime("%H:%M")
+    current_date = datetime.now().strftime("%d.%m.%Y")
     
-    caption = (
-        f"⚠️ <b>ПРОБЛЕМА НА ОБЪЕКТЕ</b>\n"
-        f"⏰ Время: {current_time}\n"
-        f"📝 Описание: {description}\n"
-        f"📸 Фото: [прикреплено]"
-    )
-    
-    await message.bot.send_photo(
-        chat_id=GROUP_ID,
-        photo=message.photo[-1].file_id,
-        caption=caption,
-        parse_mode=ParseMode.HTML
-    )
-    
-    await state.clear()
-    await message.answer(
-        "✅ Сообщение о проблеме отправлено в группу!",
-        reply_markup=get_main_inline_keyboard()
-    )
-
-@router.message(Form.problem_photo, F.text)
-async def handle_problem_no_photo(message: Message, state: FSMContext):
-    if message.text == "❌ Отмена":
-        await state.clear()
-        await message.answer(
-            "❌ Отменено",
-            reply_markup=get_main_inline_keyboard()
+    # Пересылаем сообщение в группу
+    if message.photo:
+        # Если есть фото, отправляем его с подписью
+        caption = (
+            f"💬 <b>СООБЩЕНИЕ</b>\n"
+            f"⏰ Время: {current_time}\n"
+            f"📅 Дата: {current_date}\n"
         )
-        return
-    
-    data = await state.get_data()
-    description = data["description"]
-    current_time = datetime.now().strftime("%H:%M")
-    
-    text = (
-        f"⚠️ <b>ПРОБЛЕМА НА ОБЪЕКТЕ</b>\n"
-        f"⏰ Время: {current_time}\n"
-        f"📝 Описание: {description}"
-    )
-    
-    await message.bot.send_message(
-        chat_id=GROUP_ID,
-        text=text,
-        parse_mode=ParseMode.HTML
-    )
+        if message.caption:
+            caption += f"📝 Текст: {message.caption}"
+        
+        await message.bot.send_photo(
+            chat_id=GROUP_ID,
+            photo=message.photo[-1].file_id,
+            caption=caption,
+            parse_mode=ParseMode.HTML
+        )
+    elif message.video:
+        # Если есть видео
+        caption = (
+            f"💬 <b>СООБЩЕНИЕ</b>\n"
+            f"⏰ Время: {current_time}\n"
+            f"📅 Дата: {current_date}\n"
+        )
+        if message.caption:
+            caption += f"📝 Текст: {message.caption}"
+        
+        await message.bot.send_video(
+            chat_id=GROUP_ID,
+            video=message.video.file_id,
+            caption=caption,
+            parse_mode=ParseMode.HTML
+        )
+    elif message.voice or message.video_note or message.audio:
+        # Если голосовое, кружок или аудио - пересылаем оригинал
+        await message.bot.forward_message(
+            chat_id=GROUP_ID,
+            from_chat_id=message.from_user.id,
+            message_id=message.message_id
+        )
+        
+        # Отправляем информацию
+        info_text = (
+            f"💬 <b>СООБЩЕНИЕ</b>\n"
+            f"⏰ Время: {current_time}\n"
+            f"📅 Дата: {current_date}\n"
+            f"🎤 Медиа: [прикреплено]"
+        )
+        await message.bot.send_message(
+            chat_id=GROUP_ID,
+            text=info_text,
+            parse_mode=ParseMode.HTML
+        )
+    elif message.text:
+        # Если текст
+        if message.text == "❌ Отмена":
+            await state.clear()
+            await message.answer(
+                "❌ Отменено",
+                reply_markup=get_main_inline_keyboard()
+            )
+            return
+        
+        text = (
+            f"💬 <b>СООБЩЕНИЕ</b>\n"
+            f"⏰ Время: {current_time}\n"
+            f"📅 Дата: {current_date}\n"
+            f"📝 Текст: {message.text}"
+        )
+        
+        await message.bot.send_message(
+            chat_id=GROUP_ID,
+            text=text,
+            parse_mode=ParseMode.HTML
+        )
+    elif message.document:
+        # Если документ
+        caption = (
+            f"💬 <b>СООБЩЕНИЕ</b>\n"
+            f"⏰ Время: {current_time}\n"
+            f"📅 Дата: {current_date}\n"
+        )
+        if message.caption:
+            caption += f"📝 Текст: {message.caption}"
+        
+        await message.bot.send_document(
+            chat_id=GROUP_ID,
+            document=message.document.file_id,
+            caption=caption,
+            parse_mode=ParseMode.HTML
+        )
+    else:
+        # Для других типов медиа - просто пересылаем
+        await message.bot.forward_message(
+            chat_id=GROUP_ID,
+            from_chat_id=message.from_user.id,
+            message_id=message.message_id
+        )
+        
+        info_text = (
+            f"💬 <b>СООБЩЕНИЕ</b>\n"
+            f"⏰ Время: {current_time}\n"
+            f"📅 Дата: {current_date}\n"
+            f"📎 Медиа: [прикреплено]"
+        )
+        await message.bot.send_message(
+            chat_id=GROUP_ID,
+            text=info_text,
+            parse_mode=ParseMode.HTML
+        )
     
     await state.clear()
     await message.answer(
-        "✅ Сообщение о проблеме отправлено в группу!",
+        "✅ Сообщение отправлено в группу!",
         reply_markup=get_main_inline_keyboard()
     )
 

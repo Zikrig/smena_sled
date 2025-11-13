@@ -1,10 +1,10 @@
 from aiogram import Router, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, StateFilter
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from config import GROUP_ID
 from states import Form
-from keyboards import get_main_inline_keyboard, get_cancel_keyboard, get_locations_keyboard
+from keyboards import get_main_inline_keyboard, get_cancel_keyboard
 from aiogram.enums import ParseMode
 
 router = Router()
@@ -19,8 +19,9 @@ async def cmd_start(message: Message, state: FSMContext):
         "• Передачи ТМЦ на посту\n"
         "• Фиксации обходов объекта\n"
         "• Осмотра багажников и кузовов\n"
-        "• Сообщения о проблемах\n"
-        "• Экстренных вызовов\n\n"
+        "• Проверки поста\n"
+        "• Отправки сообщений\n"
+        "• Вызовов служб\n\n"
         "<b>Выберите действие:</b>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_inline_keyboard()
@@ -35,10 +36,12 @@ async def handle_inline_cancel(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "start_shift")
 async def handle_start_shift(callback: CallbackQuery, state: FSMContext):
     await state.update_data(action_type="start")
-    await state.set_state(Form.shift_action)
+    await state.set_state(Form.waiting_round)
     await callback.message.edit_text(
-        "📍 Выберите объект:",
-        reply_markup=get_locations_keyboard()
+        "📸 <b>Начало смены</b>\n\n"
+        "Запишите видео кружочек для подтверждения начала смены:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_cancel_keyboard()
     )
     await callback.answer()
 
@@ -78,7 +81,10 @@ async def handle_location(message: Message, state: FSMContext):
             "Выберите действие:",
             reply_markup=get_main_inline_keyboard()
         )
-
+        
+@router.message(StateFilter(None), F.text)
+async def handle_any_text_as_start(message: Message, state: FSMContext):
+    await cmd_start(message, state)
 @router.message(F.text == "❌ Отмена")
 async def handle_cancel(message: Message, state: FSMContext):
     if await state.get_state() == "waiting_location":
