@@ -11,10 +11,11 @@ router = Router()
 async def handle_emergency(callback: CallbackQuery, state: FSMContext):
     # Определяем названия служб и номера из конфигурации
     services = {
-        "fire_service": ("🚒 Пожарная служба", EMERGENCY_NUMBERS.get("fire_service", "101")),
+        "fire_service": ("🚒 Общий телефон пожарной службы", EMERGENCY_NUMBERS.get("fire_service", "101")),
         "ora_duty": ("📞 Дежурная часть ОРА", EMERGENCY_NUMBERS.get("ora_duty", "")),
         "security_chief_lo": ("👨‍💼 Начальник охраны в ЛО", EMERGENCY_NUMBERS.get("security_chief_lo", "")),
-        "security_chief_spb": ("👨‍💼 Начальник охраны в СПб", EMERGENCY_NUMBERS.get("security_chief_spb", ""))
+        "security_chief_spb": ("👨‍💼 Начальник охраны в СПб", EMERGENCY_NUMBERS.get("security_chief_spb", "")),
+        "security_chief_spb": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
     }
 
     # Формируем сообщение со всеми номерами без каких-либо кнопок
