@@ -6,6 +6,10 @@ from config import GROUP_ID
 from states import Form
 from keyboards import get_cancel_keyboard, get_main_inline_keyboard
 from datetime import datetime
+from aiogram.types import FSInputFile
+import tempfile
+import os
+from image_processor import ImageProcessor
 
 router = Router()
 
@@ -31,13 +35,35 @@ async def handle_tmc_photo(message: Message, state: FSMContext):
         f"⏰ Время: {current_time}\n"
         f"📝 Журнал передачи смены: [прикреплено]"
     )
-    
-    await message.bot.send_photo(
-        chat_id=GROUP_ID,
-        photo=message.photo[-1].file_id,
-        caption=caption,
-        parse_mode=ParseMode.HTML
-    )
+
+    # Ставим дату на фото и отправляем
+    tmp_dir = tempfile.mkdtemp()
+    input_path = os.path.join(tmp_dir, "in.jpg")
+    output_path = os.path.join(tmp_dir, "out.jpg")
+    try:
+        file = await message.bot.get_file(message.photo[-1].file_id)
+        await message.bot.download(file, destination=input_path)
+        date_text = datetime.now().strftime("%d.%m.%Y")
+        ImageProcessor.add_text_with_outline(input_path, output_path, date_text)
+        await message.bot.send_photo(
+            chat_id=GROUP_ID,
+            photo=FSInputFile(output_path),
+            caption=caption,
+            parse_mode=ParseMode.HTML
+        )
+    finally:
+        try:
+            os.remove(input_path)
+        except:
+            pass
+        try:
+            os.remove(output_path)
+        except:
+            pass
+        try:
+            os.rmdir(tmp_dir)
+        except:
+            pass
     
     await state.clear()
     await message.answer(
