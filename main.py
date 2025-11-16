@@ -6,19 +6,22 @@ from config import BOT_TOKEN, LOG_LEVEL
 from handlers import start, shift, tmc_transfer, patrol, inspection, problem, emergency, post_check, admin
 
 # Настройка логирования
-os.makedirs("logs", exist_ok=True)
 log_level = getattr(logging, (LOG_LEVEL or "INFO").upper(), logging.INFO)
 logger = logging.getLogger()
 logger.setLevel(log_level)
 # Очистим существующие хэндлеры и добавим свои
 for h in list(logger.handlers):
     logger.removeHandler(h)
-file_handler = RotatingFileHandler("logs/bot.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
-file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
-logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
+try:
+    os.makedirs("logs", exist_ok=True)
+    file_handler = RotatingFileHandler("logs/bot.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+    logger.addHandler(file_handler)
+except Exception as e:
+    logger.warning("File logging disabled: %s", e)
 
 # Уровни логирования aiogram
 logging.getLogger("aiogram").setLevel(log_level)
