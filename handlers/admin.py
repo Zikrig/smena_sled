@@ -13,10 +13,8 @@ from storage import (
 )
 from states import AdminStates
 import re
-import logging
 
 router = Router()
-logger = logging.getLogger(__name__)
 
 
 def _admin_main_menu_private():
@@ -41,35 +39,28 @@ def _admin_group_menu(is_bound: bool, shortname: str | None):
 
 @router.message(Command("admin"))
 async def admin_entry(message: Message, state: FSMContext):
-    logger.info("Admin entry: chat_type=%s user_id=%s chat_id=%s", message.chat.type, message.from_user.id, message.chat.id)
     await state.clear()
     # Private admin panel
     if message.chat.type == "private":
         if ADMIN_IDS and message.from_user.id not in ADMIN_IDS:
-            logger.warning("Admin denied in private: user_id=%s", message.from_user.id)
             await message.answer("Доступ запрещён.")
             return
-        logger.info("Show private admin menu to user_id=%s", message.from_user.id)
         await message.answer("Админ-панель", reply_markup=_admin_main_menu_private())
         return
 
     # Group context: only group admins can manage; bot must be admin
     if message.chat.type in ("group", "supergroup"):
-        logger.info("Admin panel in group: chat_id=%s user_id=%s", message.chat.id, message.from_user.id)
         user_member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
         if user_member.status not in ("administrator", "creator"):
-            logger.warning("User is not admin of group: user_id=%s", message.from_user.id)
             return
         me = await message.bot.get_me()
         bot_member = await message.bot.get_chat_member(message.chat.id, me.id)
         if bot_member.status not in ("administrator", "creator"):
-            logger.warning("Bot is not admin in group chat_id=%s", message.chat.id)
             await message.answer("Дайте боту права администратора для управления этой группой.")
             return
 
         found = find_group_by_chat_id(message.chat.id)
         short = found[0] if found else None
-        logger.info("Group binding state: chat_id=%s bound=%s short=%s", message.chat.id, bool(found), short)
         await message.answer(
             "Управление этой группой:",
             reply_markup=_admin_group_menu(is_bound=bool(found), shortname=short)
@@ -142,21 +133,17 @@ async def admin_remove_group(callback: CallbackQuery):
 
 @router.callback_query(F.data == "admin_bind_here")
 async def admin_bind_here(callback: CallbackQuery, state: FSMContext):
-    logger.info("Bind request via menu: chat_id=%s user_id=%s", callback.message.chat.id, callback.from_user.id)
     # Must be from group admin, in group/supergroup, and bot admin
     if callback.message.chat.type not in ("group", "supergroup"):
-        logger.warning("Bind requested not from group: chat_type=%s", callback.message.chat.type)
         await callback.answer()
         return
     user_member = await callback.message.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
     if user_member.status not in ("administrator", "creator"):
-        logger.warning("Bind denied: user not admin user_id=%s", callback.from_user.id)
         await callback.answer()
         return
     me = await callback.message.bot.get_me()
     bot_member = await callback.message.bot.get_chat_member(callback.message.chat.id, me.id)
     if bot_member.status not in ("administrator", "creator"):
-        logger.warning("Bind denied: bot not admin chat_id=%s", callback.message.chat.id)
         await callback.message.answer("Дайте боту права администратора для управления этой группой.")
         await callback.answer()
         return
@@ -168,18 +155,10 @@ async def admin_bind_here(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.awaiting_group_shortname)
 async def admin_receive_shortname(message: Message, state: FSMContext):
     shortname = (message.text or "").strip()
-    logger.info("Received shortname input: '%s' chat_id=%s user_id=%s", shortname, message.chat.id, message.from_user.id)
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", shortname):
-        logger.warning("Shortname validation failed: '%s'", shortname)
         await message.answer("Некорректное короткое имя. Разрешены латиница, цифры, '-', '_', до 32 символов.")
         return
-    try:
-        set_group(shortname, message.chat.id, message.chat.title)
-        logger.info("Group set: short=%s chat_id=%s title=%s", shortname, message.chat.id, message.chat.title)
-    except Exception as e:
-        logger.exception("Failed to set group: short=%s chat_id=%s", shortname, message.chat.id)
-        await message.answer("❌ Не удалось привязать группу. Проверьте логи на сервере.")
-        return
+    set_group(shortname, message.chat.id, message.chat.title)
     me = await message.bot.get_me()
     if me.username:
         deep_link = f"https://t.me/{me.username}?start={shortname}"
@@ -191,7 +170,6 @@ async def admin_receive_shortname(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "admin_unbind_here")
 async def admin_unbind_here(callback: CallbackQuery):
-    logger.info("Unbind request: chat_id=%s user_id=%s", callback.message.chat.id, callback.from_user.id)
     if callback.message.chat.type not in ("group", "supergroup"):
         await callback.answer()
         return
@@ -199,11 +177,7 @@ async def admin_unbind_here(callback: CallbackQuery):
     if user_member.status not in ("administrator", "creator"):
         await callback.answer()
         return
-    ok = False
-    try:
-        ok = remove_group_by_chat_id(callback.message.chat.id)
-    except Exception:
-        logger.exception("Failed to unbind group chat_id=%s", callback.message.chat.id)
+    ok = remove_group_by_chat_id(callback.message.chat.id)
     if ok:
         await callback.message.answer("✅ Группа отвязана.")
     else:

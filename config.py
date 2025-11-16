@@ -8,7 +8,6 @@ GROUP_ID = getenv("GROUP_ID")
 ADMIN_IDS = {int(x) for x in getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
 GOOGLE_SHEET_ID = getenv("GOOGLE_SHEET_ID")
 GOOGLE_CREDENTIALS_FILE = getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
-LOG_LEVEL = getenv("LOG_LEVEL", "INFO")
 
 # Объекты охраны
 LOCATIONS = [

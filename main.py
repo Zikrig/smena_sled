@@ -1,32 +1,18 @@
 import logging
-import os
-from logging.handlers import RotatingFileHandler
 from aiogram import Bot, Dispatcher
-from config import BOT_TOKEN, LOG_LEVEL
+from config import BOT_TOKEN
 from handlers import start, shift, tmc_transfer, patrol, inspection, problem, emergency, post_check, admin
 
-# Настройка логирования
-log_level = getattr(logging, (LOG_LEVEL or "INFO").upper(), logging.INFO)
-logger = logging.getLogger()
-logger.setLevel(log_level)
-# Очистим существующие хэндлеры и добавим свои
-for h in list(logger.handlers):
-    logger.removeHandler(h)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
-logger.addHandler(stream_handler)
-try:
-    os.makedirs("logs", exist_ok=True)
-    file_handler = RotatingFileHandler("logs/bot.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
-    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
-    logger.addHandler(file_handler)
-except Exception as e:
-    logger.warning("File logging disabled: %s", e)
+# Настройка логирования (отключено)
+logging.basicConfig(
+    level=logging.CRITICAL,
+    handlers=[]
+)
 
-# Уровни логирования aiogram
-logging.getLogger("aiogram").setLevel(log_level)
-logging.getLogger("aiogram.dispatcher").setLevel(log_level)
-logging.getLogger("aiogram.event").setLevel(log_level)
+# Отключаем логирование aiogram
+logging.getLogger("aiogram").setLevel(logging.CRITICAL)
+logging.getLogger("aiogram.dispatcher").setLevel(logging.CRITICAL)
+logging.getLogger("aiogram.event").setLevel(logging.CRITICAL)
 
 # Инициализация
 bot = Bot(token=BOT_TOKEN)
@@ -38,7 +24,6 @@ for router in (start.router, shift.router, tmc_transfer.router, patrol.router, i
 
 if __name__ == "__main__":
     try:
-        logging.getLogger(__name__).info("Starting bot polling")
         dp.run_polling(bot)
     except Exception as e:
-        logging.getLogger(__name__).exception("Fatal error in polling loop")
+        pass
