@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import ADMIN_IDS
+from config import ADMIN_IDS, GROUP_ADMIN_ENFORCE
 from storage import (
     set_group,
     list_groups,
@@ -48,16 +48,17 @@ async def admin_entry(message: Message, state: FSMContext):
         await message.answer("Админ-панель", reply_markup=_admin_main_menu_private())
         return
 
-    # Group context: only group admins can manage; bot must be admin
+    # Group context: checks can be enforced or disabled by config
     if message.chat.type in ("group", "supergroup"):
-        user_member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
-        if user_member.status not in ("administrator", "creator"):
-            return
-        me = await message.bot.get_me()
-        bot_member = await message.bot.get_chat_member(message.chat.id, me.id)
-        if bot_member.status not in ("administrator", "creator"):
-            await message.answer("Дайте боту права администратора для управления этой группой.")
-            return
+        if GROUP_ADMIN_ENFORCE:
+            user_member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+            if user_member.status not in ("administrator", "creator"):
+                return
+            me = await message.bot.get_me()
+            bot_member = await message.bot.get_chat_member(message.chat.id, me.id)
+            if bot_member.status not in ("administrator", "creator"):
+                await message.answer("Дайте боту права администратора для управления этой группой.")
+                return
 
         found = find_group_by_chat_id(message.chat.id)
         short = found[0] if found else None
@@ -133,20 +134,21 @@ async def admin_remove_group(callback: CallbackQuery):
 
 @router.callback_query(F.data == "admin_bind_here")
 async def admin_bind_here(callback: CallbackQuery, state: FSMContext):
-    # Must be from group admin, in group/supergroup, and bot admin
+    # In group context; checks can be enforced or disabled
     if callback.message.chat.type not in ("group", "supergroup"):
         await callback.answer()
         return
-    user_member = await callback.message.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
-    if user_member.status not in ("administrator", "creator"):
-        await callback.answer()
-        return
-    me = await callback.message.bot.get_me()
-    bot_member = await callback.message.bot.get_chat_member(callback.message.chat.id, me.id)
-    if bot_member.status not in ("administrator", "creator"):
-        await callback.message.answer("Дайте боту права администратора для управления этой группой.")
-        await callback.answer()
-        return
+    if GROUP_ADMIN_ENFORCE:
+        user_member = await callback.message.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
+        if user_member.status not in ("administrator", "creator"):
+            await callback.answer()
+            return
+        me = await callback.message.bot.get_me()
+        bot_member = await callback.message.bot.get_chat_member(callback.message.chat.id, me.id)
+        if bot_member.status not in ("administrator", "creator"):
+            await callback.message.answer("Дайте боту права администратора для управления этой группой.")
+            await callback.answer()
+            return
     await state.set_state(AdminStates.awaiting_group_shortname)
     await callback.message.answer("Введите короткое имя для этой группы (латиница/цифры/-/_), до 32 символов:")
     await callback.answer()
@@ -173,10 +175,11 @@ async def admin_unbind_here(callback: CallbackQuery):
     if callback.message.chat.type not in ("group", "supergroup"):
         await callback.answer()
         return
-    user_member = await callback.message.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
-    if user_member.status not in ("administrator", "creator"):
-        await callback.answer()
-        return
+    if GROUP_ADMIN_ENFORCE:
+        user_member = await callback.message.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
+        if user_member.status not in ("administrator", "creator"):
+            await callback.answer()
+            return
     ok = remove_group_by_chat_id(callback.message.chat.id)
     if ok:
         await callback.message.answer("✅ Группа отвязана.")
