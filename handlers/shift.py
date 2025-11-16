@@ -2,7 +2,8 @@ from aiogram import F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ParseMode
-from config import GROUP_ID
+from storage import get_chat_id_for_user, get_user_group_shortname
+from google_sheets import gsheets
 from states import Form
 from keyboards import get_locations_keyboard, get_cancel_keyboard, get_main_inline_keyboard
 from datetime import datetime
@@ -80,7 +81,11 @@ async def handle_video_note(message: Message, state: FSMContext):
     location = data.get("location", "Не указан")
     
     # Отправляем кружочек в группу
-    await message.bot.forward_message(chat_id=GROUP_ID, from_chat_id=message.from_user.id, message_id=message.message_id)
+    chat_id = get_chat_id_for_user(message.from_user.id)
+    if not chat_id:
+        await message.answer("Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.")
+        return
+    fwd = await message.bot.forward_message(chat_id=chat_id, from_chat_id=message.from_user.id, message_id=message.message_id)
     
     # Отправляем информацию о начале смены
     current_time = datetime.now().strftime("%H:%M")
@@ -91,8 +96,8 @@ async def handle_video_note(message: Message, state: FSMContext):
         f"🎥 Видео подтверждение: [прикреплено]"
     )
     
-    await message.bot.send_message(
-        chat_id=GROUP_ID,
+    info_msg = await message.bot.send_message(
+        chat_id=chat_id,
         text=caption,
         parse_mode=ParseMode.HTML
     )
@@ -102,3 +107,15 @@ async def handle_video_note(message: Message, state: FSMContext):
         "✅ Начало смены зафиксировано! Кружочек отправлен в группу.",
         reply_markup=get_main_inline_keyboard()
     )
+    # Log to Google Sheets
+    short = get_user_group_shortname(message.from_user.id)
+    if short:
+        await gsheets.log_event(
+            shortname=short,
+            chat_id=chat_id,
+            event_type="Начало смены",
+            author_full_name=message.from_user.full_name,
+            author_username=message.from_user.username,
+            message_id=info_msg.message_id,
+            text=f"Объект: {location}"
+        )

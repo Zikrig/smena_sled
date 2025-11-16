@@ -2,7 +2,8 @@ from aiogram import F, Router
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ParseMode
-from config import GROUP_ID
+from storage import get_chat_id_for_user, get_user_group_shortname
+from google_sheets import gsheets
 from states import Form
 from keyboards import get_cancel_keyboard, get_main_inline_keyboard, get_confirm_keyboard, get_patrol_keyboard
 from datetime import datetime
@@ -20,7 +21,7 @@ async def _stamp_and_send_photo(bot, chat_id, file_id, caption=None, parse_mode=
     try:
         file = await bot.get_file(file_id)
         await bot.download(file, destination=input_path)
-        date_text = datetime.now().strftime("%d.%m.%Y")
+        date_text = datetime.now().strftime("%d.%m.%Y %H:%M")
         ImageProcessor.add_text_with_outline(input_path, output_path, date_text)
         await bot.send_photo(
             chat_id=chat_id,
@@ -97,9 +98,18 @@ async def handle_finish_patrol(callback: CallbackQuery, state: FSMContext):
     )
     
     # Отправляем первое фото с подписью
+    chat_id = get_chat_id_for_user(callback.from_user.id)
+    if not chat_id:
+        await callback.message.edit_text(
+            "Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.",
+            reply_markup=get_main_inline_keyboard()
+        )
+        await callback.answer()
+        return
+
     await _stamp_and_send_photo(
         bot=callback.message.bot,
-        chat_id=GROUP_ID,
+        chat_id=chat_id,
         file_id=photos[0],
         caption=caption,
         parse_mode=ParseMode.HTML
@@ -109,7 +119,7 @@ async def handle_finish_patrol(callback: CallbackQuery, state: FSMContext):
     for photo_id in photos[1:]:
         await _stamp_and_send_photo(
             bot=callback.message.bot,
-            chat_id=GROUP_ID,
+            chat_id=chat_id,
             file_id=photo_id
         )
     
@@ -119,4 +129,16 @@ async def handle_finish_patrol(callback: CallbackQuery, state: FSMContext):
         reply_markup=get_main_inline_keyboard()
     )
     await callback.answer()
+    # Log
+    short = get_user_group_shortname(callback.from_user.id)
+    if short:
+        await gsheets.log_event(
+            shortname=short,
+            chat_id=chat_id,
+            event_type="Обход",
+            author_full_name=callback.from_user.full_name,
+            author_username=callback.from_user.username,
+            message_id=None,
+            text=f"Количество фото: {photos_count}"
+        )
 

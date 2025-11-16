@@ -2,16 +2,31 @@ from aiogram import Router, F
 from aiogram.filters import CommandStart, StateFilter
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
-from config import GROUP_ID
+from storage import set_user_group, get_chat_id_for_user, get_group, get_user_group_shortname
+from google_sheets import gsheets
 from states import Form
 from keyboards import get_main_inline_keyboard, get_cancel_keyboard
 from aiogram.enums import ParseMode
 
 router = Router()
 
-@router.message(CommandStart())
+@router.message(CommandStart(), F.chat.type == "private")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
+    # Deep-link payload handling: /start <shortname>
+    try:
+        parts = (message.text or "").split(maxsplit=1)
+        if len(parts) > 1:
+            payload = parts[1].strip()
+            group_meta = get_group(payload)
+            if group_meta:
+                if set_user_group(message.from_user.id, payload):
+                    title = group_meta.get("title") or payload
+                    await message.answer(f"✅ Вы привязаны к группе: {title}")
+            else:
+                await message.answer("⚠️ Ссылка недействительна: группа не найдена.")
+    except Exception:
+        pass
     await message.answer(
         "🛡️ <b>БОТ ПОСТА ОХРАНЫ</b>\n\n"
         "Добро пожаловать! Этот бот предназначен для:\n"
@@ -72,8 +87,12 @@ async def ask_location(callback: CallbackQuery, state: FSMContext):
 @router.message(F.content_type == "location")
 async def handle_location(message: Message, state: FSMContext):
     if await state.get_state() == "waiting_location":
-        await message.bot.send_location(
-            chat_id=GROUP_ID,
+        chat_id = get_chat_id_for_user(message.from_user.id)
+        if not chat_id:
+            await message.answer("Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.")
+            return
+        sent = await message.bot.send_location(
+            chat_id=chat_id,
             latitude=message.location.latitude,
             longitude=message.location.longitude
         )
@@ -86,8 +105,21 @@ async def handle_location(message: Message, state: FSMContext):
             "Выберите действие:",
             reply_markup=get_main_inline_keyboard()
         )
+        # Log to Google Sheets
+        short = get_user_group_shortname(message.from_user.id)
+        if short:
+            coords = f"{message.location.latitude}, {message.location.longitude}"
+            await gsheets.log_event(
+                shortname=short,
+                chat_id=chat_id,
+                event_type="Геолокация",
+                author_full_name=message.from_user.full_name,
+                author_username=message.from_user.username,
+                message_id=sent.message_id,
+                text=coords
+            )
         
-@router.message(StateFilter(None), F.text)
+@router.message(StateFilter(None), F.text, F.chat.type == "private", ~F.text.startswith("/"))
 async def handle_any_text_as_start(message: Message, state: FSMContext):
     await cmd_start(message, state)
 @router.message(F.text == "❌ Отмена")

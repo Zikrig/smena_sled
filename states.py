@@ -25,3 +25,6 @@ class Form(StatesGroup):
     # Состояния для проверки поста
     post_check_location = State()
     post_check_video = State()
+
+class AdminStates(StatesGroup):
+    awaiting_group_shortname = State()

@@ -77,12 +77,14 @@ class ImageProcessor:
                 
                 # Рисуем текст с черным контуром
                 y_offset = text_y
+                # Небольшой сдвиг блока текста влево, чтобы не прилипал к правому краю
+                shift_left = max(20, img.width // 20)
                 for i, line in enumerate(lines):
                     bbox = draw.textbbox((0, 0), line, font=font)
                     line_width = bbox[2] - bbox[0]
                     
                     # Центрируем каждую строку в правой половине
-                    line_x = text_x + (max_text_width - line_width) // 2
+                    line_x = text_x + (max_text_width - line_width) // 2 - shift_left
                     
                     # Рисуем обводку (черный цвет в 8 направлениях)
                     for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1), 

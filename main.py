@@ -1,7 +1,7 @@
 import logging
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
-from handlers import start, shift, tmc_transfer, patrol, inspection, problem, emergency, post_check
+from handlers import start, shift, tmc_transfer, patrol, inspection, problem, emergency, post_check, admin
 
 # Настройка логирования (отключено)
 logging.basicConfig(
@@ -19,7 +19,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # Подключение роутеров
-for router in (start.router, shift.router, tmc_transfer.router, patrol.router, inspection.router, problem.router, emergency.router, post_check.router):
+for router in (start.router, shift.router, tmc_transfer.router, patrol.router, inspection.router, problem.router, emergency.router, post_check.router, admin.router):
     dp.include_router(router)
 
 if __name__ == "__main__":
