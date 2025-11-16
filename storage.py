@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 from typing import Dict, Optional, Tuple
 
 # Paths
@@ -8,12 +9,16 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 GROUPS_FILE = os.path.join(DATA_DIR, "groups.json")
 USERS_FILE = os.path.join(DATA_DIR, "user_groups.json")
 
+logger = logging.getLogger(__name__)
 
 def _ensure_storage() -> None:
+    logger.debug("Ensuring storage directories and files exist")
     os.makedirs(DATA_DIR, exist_ok=True)
     if not os.path.exists(GROUPS_FILE):
+        logger.info("Creating missing groups file at %s", GROUPS_FILE)
         _write_json(GROUPS_FILE, {})
     if not os.path.exists(USERS_FILE):
+        logger.info("Creating missing users file at %s", USERS_FILE)
         _write_json(USERS_FILE, {})
 
 
@@ -22,6 +27,7 @@ def _read_json(path: str, default):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
+        logger.warning("JSON file not found, using default: %s", path)
         return default
     except json.JSONDecodeError:
         # Corrupted file: back up and reset
@@ -29,14 +35,23 @@ def _read_json(path: str, default):
             os.replace(path, f"{path}.bak")
         except Exception:
             pass
+        logger.error("JSON decode error, backed up and resetting file: %s", path)
         return default
 
 
 def _write_json(path: str, data) -> None:
     tmp_path = f"{path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp_path, path)
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+        logger.debug("Wrote JSON file: %s (size=%s)", path, len(json.dumps(data)))
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
 
 
 def _load_groups() -> Dict[str, Dict]:
@@ -61,11 +76,14 @@ def _save_users(users: Dict[str, str]) -> None:
 
 # Group management
 def list_groups() -> Dict[str, Dict]:
-    return _load_groups()
+    groups = _load_groups()
+    logger.debug("Listing groups: %s", list(groups.keys()))
+    return groups
 
 
 def get_group(shortname: str) -> Optional[Dict]:
     groups = _load_groups()
+    logger.debug("Get group by shortname: %s found=%s", shortname, shortname in groups)
     return groups.get(shortname)
 
 
@@ -73,6 +91,7 @@ def set_group(shortname: str, chat_id: int, title: Optional[str] = None) -> None
     short = shortname.strip()
     groups = _load_groups()
     groups[short] = {"chat_id": int(chat_id), "title": title or ""}
+    logger.info("Saving group mapping: %s -> %s (%s)", short, chat_id, title or "")
     _save_groups(groups)
 
 
@@ -81,7 +100,9 @@ def remove_group(shortname: str) -> bool:
     if shortname in groups:
         del groups[shortname]
         _save_groups(groups)
+        logger.info("Removed group by shortname: %s", shortname)
         return True
+    logger.warning("Attempted to remove non-existing group: %s", shortname)
     return False
 
 
@@ -117,16 +138,20 @@ def remove_group_by_chat_id(chat_id: int) -> bool:
 def set_user_group(user_id: int, shortname: str) -> bool:
     groups = _load_groups()
     if shortname not in groups:
+        logger.warning("User mapping failed, unknown shortname: user_id=%s short=%s", user_id, shortname)
         return False
     users = _load_users()
     users[str(int(user_id))] = shortname
     _save_users(users)
+    logger.info("Mapped user to group: user_id=%s short=%s", user_id, shortname)
     return True
 
 
 def get_user_group_shortname(user_id: int) -> Optional[str]:
     users = _load_users()
-    return users.get(str(int(user_id)))
+    short = users.get(str(int(user_id)))
+    logger.debug("Get user group shortname: user_id=%s short=%s", user_id, short)
+    return short
 
 
 def get_user_group_chat_id(user_id: int) -> Optional[int]:
