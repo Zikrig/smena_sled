@@ -12,6 +12,7 @@ services:
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
+      - TZ=Europe/Moscow
     networks:
       - smena-sled-network
 
