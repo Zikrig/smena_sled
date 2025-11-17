@@ -10,6 +10,20 @@ from aiogram.enums import ParseMode
 
 router = Router()
 
+@router.message(CommandStart(), F.chat.type.in_(("group", "supergroup")))
+async def cmd_start_in_group(message: Message, state: FSMContext):
+    try:
+        member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+        if member.status not in ("administrator", "creator"):
+            await message.reply("❌ У вас нет доступа к этой команде в группе. Используйте бота в личных сообщениях.")
+            return
+    except Exception:
+        # Если не удалось проверить — отвечаем безопасно
+        await message.reply("❌ У вас нет доступа к этой команде в группе. Используйте бота в личных сообщениях.")
+        return
+    # Для админов в группе ничего не делаем (или можно подсказать про /admin)
+    # await message.reply("Откройте админ-панель командой /admin")
+
 @router.message(CommandStart(), F.chat.type == "private")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()

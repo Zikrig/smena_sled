@@ -8,74 +8,119 @@ from states import Form
 from keyboards import get_cancel_keyboard, get_main_inline_keyboard
 from datetime import datetime
 from aiogram.types import FSInputFile
-import tempfile
-import os
-from image_processor import ImageProcessor
+from media_utils import stamp_and_send_album
+import asyncio
 
 router = Router()
 
 @router.callback_query(F.data == "transfer_tmc")
 async def handle_transfer_tmc(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(media_files=[], media_captions=[], media_kinds=[], flush_scheduled=False)
     await state.set_state(Form.transfer_tmc_photo)
     await callback.message.edit_text(
         "📋 <b>Передача ТМЦ на посту</b>\n\n"
-        "Сделайте фото журнала передачи смены с записью:\n"
-        "• Факт передачи смены новому охраннику\n"
-        "• Список передаваемых ТМЦ (рация, ключи и т.д.)\n\n"
-        "📸 Отправьте фото журнала:",
+        "Сделайте одну или несколько фотографий через камеру мобильного телефона (не в приложении Телеграм).\n"
+        "Затем через скрепку прикрепите фото журнала передачи смены и отправьте.\n\n"
+        "Фото отправятся одним сообщением, если вы прикрепите их сразу альбомом.",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_keyboard()
     )
     await callback.answer()
 
-@router.message(Form.transfer_tmc_photo, F.photo)
+@router.message(Form.transfer_tmc_photo, F.photo | F.video)
 async def handle_tmc_photo(message: Message, state: FSMContext):
-    current_time = datetime.now().strftime("%H:%M")
-    caption = (
+    chat_id = get_chat_id_for_user(message.from_user.id)
+    if not chat_id:
+        await message.answer("Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.")
+        return
+    if message.media_group_id:
+        data = await state.get_data()
+        files = data.get("media_files", [])
+        caps = data.get("media_captions", [])
+        kinds = data.get("media_kinds", [])
+        if message.photo:
+            files.append(message.photo[-1].file_id)
+            kinds.append("photo")
+        else:
+            files.append(message.video.file_id)
+            kinds.append("video")
+        caps.append(message.caption or None)
+        await state.update_data(media_files=files, media_captions=caps, media_kinds=kinds, media_group_id=message.media_group_id)
+        if not data.get("flush_scheduled"):
+            await state.update_data(flush_scheduled=True)
+            async def _flush():
+                await asyncio.sleep(1.0)
+                d = await state.get_data()
+                files2 = d.get("media_files", [])
+                caps2 = d.get("media_captions", [])
+                kinds2 = d.get("media_kinds", [])
+                if not files2:
+                    return
+                header = (
+                    f"📋 <b>Передача ТМЦ на посту</b>\n"
+                    f"⏰ Время: {datetime.now().strftime('%H:%M')}\n"
+                    f"📝 Журнал передачи смены: [альбом]\n"
+                    f"📸 Количество медиа: {len(files2)}"
+                )
+                await stamp_and_send_album(
+                    bot=message.bot,
+                    chat_id=chat_id,
+                    file_ids=files2,
+                    captions=caps2,
+                    kinds=kinds2,
+                    header=header,
+                    parse_mode=ParseMode.HTML
+                )
+                await state.clear()
+                await message.answer(
+                    f"✅ Передача ТМЦ завершена! Отправлено {len(files2)} медиа в группу.",
+                    reply_markup=get_main_inline_keyboard()
+                )
+                short = get_user_group_shortname(message.from_user.id)
+                if short:
+                    await gsheets.log_event(
+                        shortname=short,
+                        chat_id=chat_id,
+                        event_type="Передача ТМЦ",
+                        author_full_name=message.from_user.full_name,
+                        author_username=message.from_user.username,
+                        message_id=None,
+                        text=f"Количество медиа: {len(files2)}"
+                    )
+            asyncio.create_task(_flush())
+        return
+    # Single media
+    header = (
         f"📋 <b>Передача ТМЦ на посту</b>\n"
-        f"⏰ Время: {current_time}\n"
-        f"📝 Журнал передачи смены: [прикреплено]"
+        f"⏰ Время: {datetime.now().strftime('%H:%M')}\n"
+        f"📝 Журнал передачи смены: [альбом]\n"
+        f"📸 Количество медиа: 1"
     )
-
-    # Ставим дату на фото и отправляем
-    tmp_dir = tempfile.mkdtemp()
-    input_path = os.path.join(tmp_dir, "in.jpg")
-    output_path = os.path.join(tmp_dir, "out.jpg")
-    try:
-        file = await message.bot.get_file(message.photo[-1].file_id)
-        await message.bot.download(file, destination=input_path)
-        date_text = datetime.now().strftime("%d.%m.%Y %H:%M")
-        ImageProcessor.add_text_with_outline(input_path, output_path, date_text)
-        chat_id = get_chat_id_for_user(message.from_user.id)
-        if not chat_id:
-            await message.answer("Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.")
-            return
-        sent = await message.bot.send_photo(
+    if message.photo:
+        await stamp_and_send_album(
+            bot=message.bot,
             chat_id=chat_id,
-            photo=FSInputFile(output_path),
-            caption=caption,
+            file_ids=[message.photo[-1].file_id],
+            captions=[message.caption or None],
+            kinds=["photo"],
+            header=header,
             parse_mode=ParseMode.HTML
         )
-    finally:
-        try:
-            os.remove(input_path)
-        except:
-            pass
-        try:
-            os.remove(output_path)
-        except:
-            pass
-        try:
-            os.rmdir(tmp_dir)
-        except:
-            pass
-    
+    else:
+        await stamp_and_send_album(
+            bot=message.bot,
+            chat_id=chat_id,
+            file_ids=[message.video.file_id],
+            captions=[message.caption or None],
+            kinds=["video"],
+            header=header,
+            parse_mode=ParseMode.HTML
+        )
     await state.clear()
     await message.answer(
-        "✅ Фото журнала передачи ТМЦ отправлено в группу!",
+        "✅ Передача ТМЦ завершена! Отправлено 1 медиа в группу.",
         reply_markup=get_main_inline_keyboard()
     )
-    # Log
     short = get_user_group_shortname(message.from_user.id)
     if short:
         await gsheets.log_event(
@@ -84,7 +129,7 @@ async def handle_tmc_photo(message: Message, state: FSMContext):
             event_type="Передача ТМЦ",
             author_full_name=message.from_user.full_name,
             author_username=message.from_user.username,
-            message_id=sent.message_id,
-            text="Журнал передачи смены"
+            message_id=None,
+            text="Количество фото: 1"
         )
 

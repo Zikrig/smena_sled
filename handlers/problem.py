@@ -8,47 +8,19 @@ from states import Form
 from keyboards import get_cancel_keyboard, get_main_inline_keyboard
 from datetime import datetime
 from aiogram.types import FSInputFile
-import tempfile
-import os
-from image_processor import ImageProcessor
+from media_utils import stamp_and_send_album
+import asyncio
 
 router = Router()
 
-async def _stamp_and_send_photo(bot, chat_id, file_id, caption=None, parse_mode=None):
-    tmp_dir = tempfile.mkdtemp()
-    input_path = os.path.join(tmp_dir, "in.jpg")
-    output_path = os.path.join(tmp_dir, "out.jpg")
-    try:
-        file = await bot.get_file(file_id)
-        await bot.download(file, destination=input_path)
-        date_text = datetime.now().strftime("%d.%m.%Y %H:%M")
-        ImageProcessor.add_text_with_outline(input_path, output_path, date_text)
-        await bot.send_photo(
-            chat_id=chat_id,
-            photo=FSInputFile(output_path),
-            caption=caption,
-            parse_mode=parse_mode
-        )
-    finally:
-        try:
-            os.remove(input_path)
-        except:
-            pass
-        try:
-            os.remove(output_path)
-        except:
-            pass
-        try:
-            os.rmdir(tmp_dir)
-        except:
-            pass
-
 @router.callback_query(F.data == "problem")
 async def handle_problem(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(media_files=[], media_captions=[], media_kinds=[], flush_scheduled=False)
     await state.set_state(Form.problem_description)
     await callback.message.edit_text(
         "💬 <b>Сообщение</b>\n\n"
-        "Напишите, запишите голосовое сообщение или пришлите фото, о чем желаете сообщить.",
+        "Напишите текст, запишите голос/видео или пришлите фото.\n"
+        "Если нужно отправить несколько фото — прикрепите все через скрепку. Фото уйдут одним сообщением.",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_keyboard()
     )
@@ -59,49 +31,104 @@ async def handle_problem_message(message: Message, state: FSMContext):
     current_time = datetime.now().strftime("%H:%M")
     current_date = datetime.now().strftime("%d.%m.%Y")
     
-    # Пересылаем сообщение в группу
-    if message.photo:
-        # Если есть фото, отправляем его с подписью
-        caption = (
-            f"💬 <b>СООБЩЕНИЕ</b>\n"
-            f"⏰ Время: {current_time}\n"
-            f"📅 Дата: {current_date}\n"
-        )
-        if message.caption:
-            caption += f"📝 Текст: {message.caption}"
+    # Фото/Видео: отправка с подписью(ями). Если альбом (media_group_id) — копим и отправляем автоматически.
+    if message.photo or message.video:
         chat_id = get_chat_id_for_user(message.from_user.id)
         if not chat_id:
             await message.answer("Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.")
             await state.clear()
             return
-        sent_photo = await _stamp_and_send_photo(
-            bot=message.bot,
-            chat_id=chat_id,
-            file_id=message.photo[-1].file_id,
-            caption=caption,
-            parse_mode=ParseMode.HTML
-        )
-    elif message.video:
-        # Если есть видео
-        caption = (
+        if message.media_group_id:
+            data = await state.get_data()
+            files = data.get("media_files", [])
+            caps = data.get("media_captions", [])
+            kinds = data.get("media_kinds", [])
+            if message.photo:
+                files.append(message.photo[-1].file_id)
+                kinds.append("photo")
+            else:
+                files.append(message.video.file_id)
+                kinds.append("video")
+            caps.append(message.caption or None)
+            await state.update_data(media_files=files, media_captions=caps, media_kinds=kinds, media_group_id=message.media_group_id)
+            if not data.get("flush_scheduled"):
+                await state.update_data(flush_scheduled=True)
+                async def _flush():
+                    await asyncio.sleep(1.0)
+                    d = await state.get_data()
+                    files2 = d.get("media_files", [])
+                    caps2 = d.get("media_captions", [])
+                    kinds2 = d.get("media_kinds", [])
+                    if not files2:
+                        return
+                    header = (
+                        f"💬 <b>СООБЩЕНИЕ</b>\n"
+                        f"⏰ Время: {datetime.now().strftime('%H:%M')}\n"
+                        f"📅 Дата: {datetime.now().strftime('%d.%m.%Y')}\n"
+                        f"📎 Медиа: [альбом]"
+                    )
+                    await stamp_and_send_album(
+                        bot=message.bot,
+                        chat_id=chat_id,
+                        file_ids=files2,
+                        captions=caps2,
+                        header=header,
+                        kinds=kinds2,
+                        parse_mode=ParseMode.HTML
+                    )
+                    await state.clear()
+                    await message.answer(
+                        f"✅ Сообщение с медиа отправлено! Отправлено {len(files2)} элементов.",
+                        reply_markup=get_main_inline_keyboard()
+                    )
+                    short = get_user_group_shortname(message.from_user.id)
+                    if short:
+                        await gsheets.log_event(
+                            shortname=short,
+                            chat_id=chat_id,
+                            event_type="Сообщение (альбом)",
+                            author_full_name=message.from_user.full_name,
+                            author_username=message.from_user.username,
+                            message_id=None,
+                            text=f"Медиа: {len(files2)}"
+                        )
+                asyncio.create_task(_flush())
+            return
+        # Single media
+        header = (
             f"💬 <b>СООБЩЕНИЕ</b>\n"
             f"⏰ Время: {current_time}\n"
             f"📅 Дата: {current_date}\n"
+            f"📎 Медиа: [альбом]"
         )
-        if message.caption:
-            caption += f"📝 Текст: {message.caption}"
-        
-        chat_id = get_chat_id_for_user(message.from_user.id)
-        if not chat_id:
-            await message.answer("Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.")
-            await state.clear()
-            return
-        sent_video = await message.bot.send_video(
-            chat_id=chat_id,
-            video=message.video.file_id,
-            caption=caption,
-            parse_mode=ParseMode.HTML
+        if message.photo:
+            await stamp_and_send_album(
+                bot=message.bot,
+                chat_id=chat_id,
+                file_ids=[message.photo[-1].file_id],
+                captions=[message.caption or None],
+                header=header,
+                kinds=["photo"],
+                parse_mode=ParseMode.HTML
+            )
+        else:
+            await stamp_and_send_album(
+                bot=message.bot,
+                chat_id=chat_id,
+                file_ids=[message.video.file_id],
+                captions=[message.caption or None],
+                header=header,
+                kinds=["video"],
+                parse_mode=ParseMode.HTML
+            )
+        await state.clear()
+        await message.answer(
+            "✅ Сообщение с медиа отправлено!",
+            reply_markup=get_main_inline_keyboard()
         )
+        return
+    
+    # Пересылаем прочие медиа/текст сразу
     elif message.voice or message.video_note or message.audio:
         # Если голосовое, кружок или аудио - пересылаем оригинал
         chat_id = get_chat_id_for_user(message.from_user.id)
@@ -226,4 +253,5 @@ async def handle_problem_message(message: Message, state: FSMContext):
             message_id=mid,
             text=message.caption or (message.text if message.text and message.text != "❌ Отмена" else "")
         )
+
 

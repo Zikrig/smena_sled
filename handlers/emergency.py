@@ -18,24 +18,20 @@ async def handle_emergency(callback: CallbackQuery, state: FSMContext):
         "security_chief_spb": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
     }
 
-    # Формируем сообщение со всеми номерами без каких-либо кнопок
+    # Формируем сообщение со всеми номерами
     lines = ["🚨 <b>ВЫЗОВ</b>", ""]
     for _, (name, number) in services.items():
         if not number:
             continue
         lines.append(f"{name}")
-        lines.append(f"☎️ {number}")
+        lines.append(f"☎️ <code>{number}</code>")
         lines.append("")  # пустая строка-разделитель
 
     text = "\n".join(lines).rstrip()
 
-    await callback.message.edit_text(
-        text,
-        parse_mode=ParseMode.HTML
-    )
-    # Предлагаем вернуться в главное меню
     await callback.message.answer(
-        "Что-то еще?",
+        text,
+        parse_mode=ParseMode.HTML,
         reply_markup=get_main_inline_keyboard()
     )
     await callback.answer()
