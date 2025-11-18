@@ -1,6 +1,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
+from aiogram.enums import ParseMode
 from keyboards import get_main_inline_keyboard
 from config import EMERGENCY_NUMBERS
 
@@ -14,16 +15,28 @@ async def handle_emergency(callback: CallbackQuery, state: FSMContext):
         "ora_duty": ("📞 Дежурная часть ОРА", EMERGENCY_NUMBERS.get("ora_duty", "")),
         "security_chief_lo": ("👨‍💼 Начальник охраны в ЛО", EMERGENCY_NUMBERS.get("security_chief_lo", "")),
         "security_chief_spb": ("👨‍💼 Начальник охраны в СПб", EMERGENCY_NUMBERS.get("security_chief_spb", "")),
-        "security_chief_so": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
+        "security_chief_spb": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
     }
 
-    # Отправляем все контакты карточками
+    # Формируем сообщение со всеми номерами без каких-либо кнопок
+    lines = ["🚨 <b>ВЫЗОВ</b>", ""]
     for _, (name, number) in services.items():
         if not number:
             continue
-        await callback.message.answer_contact(phone_number=number, first_name=name)
+        lines.append(f"{name}")
+        lines.append(f"☎️ {number}")
+        lines.append("")  # пустая строка-разделитель
 
-    # Следующим сообщением — главное меню с подписью "Что-то еще?"
-    await callback.message.answer("Что-то еще?", reply_markup=get_main_inline_keyboard())
+    text = "\n".join(lines).rstrip()
+
+    await callback.message.edit_text(
+        text,
+        parse_mode=ParseMode.HTML
+    )
+    # Предлагаем вернуться в главное меню
+    await callback.message.answer(
+        "Что-то еще?",
+        reply_markup=get_main_inline_keyboard()
+    )
     await callback.answer()
 
