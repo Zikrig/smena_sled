@@ -5,7 +5,7 @@ from aiogram.enums import ParseMode
 from storage import get_chat_id_for_user, get_user_group_shortname
 from google_sheets import gsheets
 from states import Form
-from keyboards import get_cancel_keyboard, get_main_inline_keyboard
+from keyboards import get_cancel_keyboard, get_main_inline_keyboard, get_done_keyboard
 from datetime import datetime
 from aiogram.types import FSInputFile
 from media_utils import stamp_and_send_album
@@ -76,6 +76,18 @@ async def handle_problem_message(message: Message, state: FSMContext):
                         kinds=kinds2,
                         parse_mode=ParseMode.HTML
                     )
+                    # Отправляем и закрепляем статусное сообщение с кнопкой ГОТОВО
+                    status_text = header + "\n\n❌ НЕ ВЫПОЛНЕНО"
+                    status_msg = await message.bot.send_message(
+                        chat_id=chat_id,
+                        text=status_text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=get_done_keyboard()
+                    )
+                    try:
+                        await message.bot.pin_chat_message(chat_id=chat_id, message_id=status_msg.message_id)
+                    except Exception:
+                        pass
                     await state.clear()
                     await message.answer(
                         f"✅ Сообщение с медиа отправлено! Отправлено {len(files2)} элементов.",
@@ -99,7 +111,7 @@ async def handle_problem_message(message: Message, state: FSMContext):
             f"💬 <b>СООБЩЕНИЕ</b>\n"
             f"⏰ Время: {current_time}\n"
             f"📅 Дата: {current_date}\n"
-            f"📎 Медиа: [альбом]"
+            f"📎 Медиа: [прикреплено]"
         )
         if message.photo:
             await stamp_and_send_album(
@@ -121,6 +133,18 @@ async def handle_problem_message(message: Message, state: FSMContext):
                 kinds=["video"],
                 parse_mode=ParseMode.HTML
             )
+        # Статусное сообщение с кнопкой и закреплением
+        status_text = header + "\n\n❌ НЕ ВЫПОЛНЕНО"
+        status_msg = await message.bot.send_message(
+            chat_id=chat_id,
+            text=status_text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_done_keyboard()
+        )
+        try:
+            await message.bot.pin_chat_message(chat_id=chat_id, message_id=status_msg.message_id)
+        except Exception:
+            pass
         await state.clear()
         await message.answer(
             "✅ Сообщение с медиа отправлено!",
@@ -147,13 +171,19 @@ async def handle_problem_message(message: Message, state: FSMContext):
             f"💬 <b>СООБЩЕНИЕ</b>\n"
             f"⏰ Время: {current_time}\n"
             f"📅 Дата: {current_date}\n"
-            f"🎤 Медиа: [прикреплено]"
+            f"🎤 Медиа: [прикреплено]\n\n"
+            f"❌ НЕ ВЫПОЛНЕНО"
         )
         info = await message.bot.send_message(
             chat_id=chat_id,
             text=info_text,
-            parse_mode=ParseMode.HTML
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_done_keyboard()
         )
+        try:
+            await message.bot.pin_chat_message(chat_id=chat_id, message_id=info.message_id)
+        except Exception:
+            pass
     elif message.text:
         # Если текст
         if message.text == "❌ Отмена":
@@ -168,7 +198,8 @@ async def handle_problem_message(message: Message, state: FSMContext):
             f"💬 <b>СООБЩЕНИЕ</b>\n"
             f"⏰ Время: {current_time}\n"
             f"📅 Дата: {current_date}\n"
-            f"📝 Текст: {message.text}"
+            f"📝 Текст: {message.text}\n\n"
+            f"❌ НЕ ВЫПОЛНЕНО"
         )
         
         chat_id = get_chat_id_for_user(message.from_user.id)
@@ -179,8 +210,13 @@ async def handle_problem_message(message: Message, state: FSMContext):
         sent_text = await message.bot.send_message(
             chat_id=chat_id,
             text=text,
-            parse_mode=ParseMode.HTML
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_done_keyboard()
         )
+        try:
+            await message.bot.pin_chat_message(chat_id=chat_id, message_id=sent_text.message_id)
+        except Exception:
+            pass
     elif message.document:
         # Если документ
         caption = (
@@ -189,7 +225,8 @@ async def handle_problem_message(message: Message, state: FSMContext):
             f"📅 Дата: {current_date}\n"
         )
         if message.caption:
-            caption += f"📝 Текст: {message.caption}"
+            caption += f"📝 Текст: {message.caption}\n"
+        caption += "\n❌ НЕ ВЫПОЛНЕНО"
         
         chat_id = get_chat_id_for_user(message.from_user.id)
         if not chat_id:
@@ -200,8 +237,13 @@ async def handle_problem_message(message: Message, state: FSMContext):
             chat_id=chat_id,
             document=message.document.file_id,
             caption=caption,
-            parse_mode=ParseMode.HTML
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_done_keyboard()
         )
+        try:
+            await message.bot.pin_chat_message(chat_id=chat_id, message_id=sent_doc.message_id)
+        except Exception:
+            pass
     else:
         # Для других типов медиа - просто пересылаем
         chat_id = get_chat_id_for_user(message.from_user.id)
@@ -219,13 +261,19 @@ async def handle_problem_message(message: Message, state: FSMContext):
             f"💬 <b>СООБЩЕНИЕ</b>\n"
             f"⏰ Время: {current_time}\n"
             f"📅 Дата: {current_date}\n"
-            f"📎 Медиа: [прикреплено]"
+            f"📎 Медиа: [прикреплено]\n\n"
+            f"❌ НЕ ВЫПОЛНЕНО"
         )
         info_other = await message.bot.send_message(
             chat_id=chat_id,
             text=info_text,
-            parse_mode=ParseMode.HTML
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_done_keyboard()
         )
+        try:
+            await message.bot.pin_chat_message(chat_id=chat_id, message_id=info_other.message_id)
+        except Exception:
+            pass
     
     await state.clear()
     await message.answer(
@@ -253,5 +301,41 @@ async def handle_problem_message(message: Message, state: FSMContext):
             message_id=mid,
             text=message.caption or (message.text if message.text and message.text != "❌ Отмена" else "")
         )
+
+@router.callback_query(F.data == "message_done")
+async def handle_message_done(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.message.bot.unpin_chat_message(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id
+        )
+    except Exception:
+        pass
+    # Обновим текст/подпись и уберем кнопку
+    try:
+        if callback.message.text:
+            new_text = callback.message.text.replace("❌ НЕ ВЫПОЛНЕНО", "✅ ГОТОВО", 1)
+            if new_text == callback.message.text:
+                new_text = callback.message.text.replace("НЕ ВЫПОЛНЕНО", "ГОТОВО", 1)
+            await callback.message.edit_text(
+                text=new_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=None
+            )
+        elif callback.message.caption:
+            new_caption = callback.message.caption.replace("❌ НЕ ВЫПОЛНЕНО", "✅ ГОТОВО", 1)
+            if new_caption == callback.message.caption:
+                new_caption = callback.message.caption.replace("НЕ ВЫПОЛНЕНО", "ГОТОВО", 1)
+            await callback.message.edit_caption(
+                caption=new_caption,
+                parse_mode=ParseMode.HTML,
+                reply_markup=None
+            )
+        else:
+            # На всякий случай просто уберем клавиатуру
+            await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await callback.answer("Отмечено как ГОТОВО и откреплено")
 
 
