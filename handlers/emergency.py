@@ -15,7 +15,7 @@ async def handle_emergency(callback: CallbackQuery, state: FSMContext):
         "ora_duty": ("📞 Дежурная часть ОРА", EMERGENCY_NUMBERS.get("ora_duty", "")),
         "security_chief_lo": ("👨‍💼 Начальник охраны в ЛО", EMERGENCY_NUMBERS.get("security_chief_lo", "")),
         "security_chief_spb": ("👨‍💼 Начальник охраны в СПб", EMERGENCY_NUMBERS.get("security_chief_spb", "")),
-        "security_chief_spb": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
+        "security_chief_so": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
     }
 
     # Формируем сообщение со всеми номерами без каких-либо кнопок

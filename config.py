@@ -10,19 +10,10 @@ GOOGLE_SHEET_ID = getenv("GOOGLE_SHEET_ID")
 GOOGLE_CREDENTIALS_FILE = getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
 GROUP_ADMIN_ENFORCE = getenv("GROUP_ADMIN_ENFORCE", "true").lower() == "true"
 
-# Объекты охраны
-LOCATIONS = [
-    "Торговый центр 'Мега'",
-    "Бизнес-центр 'Столица'",
-    "Жилой комплекс 'Премиум'",
-    "Складской комплекс 'Логистик'",
-    "Офисное здание 'Деловой'"
-]
-
 # Номера экстренных служб
 EMERGENCY_NUMBERS = {
     "fire_service": "101",
-    "ora_duty": "89213092725",
+    "ora_duty": "89213092809",
     "security_chief_lo": "89213173079",
     "security_chief_spb": "89213666399",
     "security_chief_so": "88137961262"
