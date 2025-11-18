@@ -1,7 +1,6 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
-from aiogram.enums import ParseMode
 from keyboards import get_main_inline_keyboard
 from config import EMERGENCY_NUMBERS
 
@@ -15,24 +14,16 @@ async def handle_emergency(callback: CallbackQuery, state: FSMContext):
         "ora_duty": ("📞 Дежурная часть ОРА", EMERGENCY_NUMBERS.get("ora_duty", "")),
         "security_chief_lo": ("👨‍💼 Начальник охраны в ЛО", EMERGENCY_NUMBERS.get("security_chief_lo", "")),
         "security_chief_spb": ("👨‍💼 Начальник охраны в СПб", EMERGENCY_NUMBERS.get("security_chief_spb", "")),
-        "security_chief_spb": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
+        "security_chief_so": ("👨‍💼 Пожарная служба в Сосново", EMERGENCY_NUMBERS.get("security_chief_so", ""))
     }
 
-    # Формируем сообщение со всеми номерами
-    lines = ["🚨 <b>ВЫЗОВ</b>", ""]
+    # Отправляем все контакты карточками
     for _, (name, number) in services.items():
         if not number:
             continue
-        lines.append(f"{name}")
-        lines.append(f"☎️ {number}")
-        lines.append("")  # пустая строка-разделитель
+        await callback.message.answer_contact(phone_number=number, first_name=name)
 
-    text = "\n".join(lines).rstrip()
-
-    await callback.message.answer(
-        text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=get_main_inline_keyboard()
-    )
+    # Следующим сообщением — главное меню с подписью "Что-то еще?"
+    await callback.message.answer("Что-то еще?", reply_markup=get_main_inline_keyboard())
     await callback.answer()
 
