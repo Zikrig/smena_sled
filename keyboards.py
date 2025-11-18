@@ -77,3 +77,10 @@ def get_done_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="ГОТОВО", callback_data="message_done")
     return builder.as_markup()
+
+def get_tmc_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Завершить передачу", callback_data="finish_tmc")
+    builder.button(text="❌ Отмена", callback_data="cancel_action")
+    builder.adjust(2)
+    return builder.as_markup()

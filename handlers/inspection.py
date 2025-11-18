@@ -15,121 +15,134 @@ router = Router()
 
 @router.callback_query(F.data == "inspection")
 async def handle_inspection(callback: CallbackQuery, state: FSMContext):
-    await state.update_data(photos_received=0, photos=[])
+    await state.update_data(inspection_photos=[], inspection_times=[], inspection_control_message_id=None)
     await state.set_state(Form.inspection_photos)
     await callback.message.edit_text(
         "🔍 <b>Осмотр/Фотофиксация</b>\n\n"
-        "Сделайте одну или несколько фотографий через камеру мобильного телефона (не в приложении Телеграм).\n"
-        "Затем через скрепку прикрепите нужное количество фотографий и отправьте.\n\n"
-        "Фото отправятся одним сообщением, если вы прикрепите их сразу альбомом.",
+        "Сделайте фото и отправляйте <b>по одной</b>.\n"
+        "Нажмите «Завершить осмотр», когда закончите.\n"
+        "Можно отправить до 30 фото.",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_keyboard()
     )
     await callback.answer()
 
-@router.message(Form.inspection_photos, F.photo | F.video)
+@router.message(Form.inspection_photos, F.photo)
 async def handle_inspection_photo(message: Message, state: FSMContext):
-    chat_id = get_chat_id_for_user(message.from_user.id)
+    data = await state.get_data()
+    photos = data.get("inspection_photos", [])
+    times = data.get("inspection_times", [])
+    control_id = data.get("inspection_control_message_id")
+
+    if len(photos) >= 30:
+        await message.answer("Достигнут лимит 30 фото. Нажмите «Завершить осмотр».", reply_markup=get_inspection_keyboard())
+        return
+
+    photos.append(message.photo[-1].file_id)
+    times.append(datetime.now().strftime("%H:%M"))
+    await state.update_data(inspection_photos=photos, inspection_times=times)
+
+    if control_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=control_id)
+        except Exception:
+            pass
+
+    new_msg = await message.answer(
+        f"📸 Получено фото {len(photos)}\n"
+        f"Отправьте следующее фото или нажмите «Завершить осмотр».",
+        reply_markup=get_inspection_keyboard()
+    )
+    await state.update_data(inspection_control_message_id=new_msg.message_id)
+
+@router.callback_query(Form.inspection_photos, F.data == "finish_inspection")
+async def finish_inspection(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    photos = data.get("inspection_photos", []) or []
+    times = data.get("inspection_times", []) or []
+    control_id = data.get("inspection_control_message_id")
+    photos_count = len(photos)
+
+    if photos_count == 0:
+        try:
+            await callback.message.edit_text(
+                "❌ Осмотр не может быть завершен без фотографий.\n\n"
+                "Сделайте фото и отправьте <b>по одной</b>.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_inspection_keyboard()
+            )
+        except Exception:
+            pass
+        await callback.answer()
+        return
+
+    chat_id = get_chat_id_for_user(callback.from_user.id)
     if not chat_id:
-        await message.answer("Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.")
+        await callback.message.edit_text(
+            "Не настроена группа для отправки. Получите ссылку у администратора и запустите бота по ней.",
+            reply_markup=get_main_inline_keyboard()
+        )
+        await callback.answer()
         return
-    if message.media_group_id:
-        data = await state.get_data()
-        files = data.get("media_files", [])
-        caps = data.get("media_captions", [])
-        kinds = data.get("media_kinds", [])
-        if message.photo:
-            files.append(message.photo[-1].file_id)
-            kinds.append("photo")
-        else:
-            files.append(message.video.file_id)
-            kinds.append("video")
-        caps.append(message.caption or None)
-        await state.update_data(media_files=files, media_captions=caps, media_kinds=kinds, media_group_id=message.media_group_id)
-        if not data.get("flush_scheduled"):
-            await state.update_data(flush_scheduled=True)
-            async def _flush():
-                await asyncio.sleep(1.0)
-                d = await state.get_data()
-                files2 = d.get("media_files", [])
-                caps2 = d.get("media_captions", [])
-                kinds2 = d.get("media_kinds", [])
-                if not files2:
-                    return
-                header = (
-                    f"🔍 <b>Осмотр/Фотофиксация</b>\n"
-                    f"⏰ Время: {datetime.now().strftime('%H:%M')}\n"
-                    f"📸 Количество медиа: {len(files2)}\n"
-                    f"📎 Фотофиксация: [альбом]"
-                )
-                await stamp_and_send_album(
-                    bot=message.bot,
-                    chat_id=chat_id,
-                    file_ids=files2,
-                    captions=caps2,
-                    kinds=kinds2,
-                    header=header,
-                    parse_mode=ParseMode.HTML
-                )
-                await state.clear()
-                await message.answer(
-                    f"✅ Осмотр завершен! Отправлено {len(files2)} медиа в группу.",
-                    reply_markup=get_main_inline_keyboard()
-                )
-                short = get_user_group_shortname(message.from_user.id)
-                if short:
-                    await gsheets.log_event(
-                        shortname=short,
-                        chat_id=chat_id,
-                        event_type="Осмотр/Фотофиксация",
-                        author_full_name=message.from_user.full_name,
-                        author_username=message.from_user.username,
-                        message_id=None,
-                        text=f"Количество медиа: {len(files2)}"
-                    )
-            asyncio.create_task(_flush())
-        return
-    # Single media
+
     header = (
         f"🔍 <b>Осмотр/Фотофиксация</b>\n"
-        f"⏰ Время: {datetime.now().strftime('%H:%M')}\n"
-        f"📸 Количество медиа: 1\n"
-        f"📎 Фотофиксация: [альбом]"
+        f"📅 Дата: {datetime.now().strftime('%d.%m.%Y')}\n"
+        f"📸 Количество фото: {photos_count}\n"
+        f"📎 Фотофиксация: [альбом]\n"
+        f"\n"
+        f"🕒 Время:\n" + "\n".join(times)
     )
-    if message.photo:
-        await stamp_and_send_album(
-            bot=message.bot,
-            chat_id=chat_id,
-            file_ids=[message.photo[-1].file_id],
-            captions=[message.caption or None],
-            kinds=["photo"],
-            header=header,
-            parse_mode=ParseMode.HTML
-        )
-    else:
-        await stamp_and_send_album(
-            bot=message.bot,
-            chat_id=chat_id,
-            file_ids=[message.video.file_id],
-            captions=[message.caption or None],
-            kinds=["video"],
-            header=header,
-            parse_mode=ParseMode.HTML
-        )
+    await stamp_and_send_album(
+        bot=callback.message.bot,
+        chat_id=chat_id,
+        file_ids=photos,
+        captions=[None] * photos_count,
+        kinds=["photo"] * photos_count,
+        header=header,
+        parse_mode=ParseMode.HTML
+    )
+
     await state.clear()
-    await message.answer(
-        "✅ Осмотр завершен! Отправлено 1 медиа в группу.",
-        reply_markup=get_main_inline_keyboard()
-    )
-    short = get_user_group_shortname(message.from_user.id)
+    if control_id and control_id != callback.message.message_id:
+        try:
+            await callback.message.bot.delete_message(chat_id=callback.message.chat.id, message_id=control_id)
+        except Exception:
+            pass
+    try:
+        await callback.message.edit_text(
+            f"✅ Осмотр завершен! Отправлено {photos_count} фото в группу.",
+            reply_markup=get_main_inline_keyboard()
+        )
+    except Exception:
+        pass
+    await callback.answer()
+
+    short = get_user_group_shortname(callback.from_user.id)
     if short:
         await gsheets.log_event(
             shortname=short,
             chat_id=chat_id,
             event_type="Осмотр/Фотофиксация",
-            author_full_name=message.from_user.full_name,
-            author_username=message.from_user.username,
+            author_full_name=callback.from_user.full_name,
+            author_username=callback.from_user.username,
             message_id=None,
-            text="Количество фото: 1"
+            text=f"Количество фото: {photos_count}"
         )
+
+@router.callback_query(Form.inspection_photos, F.data == "cancel_action")
+async def cancel_inspection(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    control_id = data.get("inspection_control_message_id")
+    await state.clear()
+    if control_id and control_id != callback.message.message_id:
+        try:
+            await callback.message.bot.delete_message(chat_id=callback.message.chat.id, message_id=control_id)
+        except Exception:
+            pass
+    try:
+        await callback.message.edit_text("❌ Осмотр отменен.", reply_markup=get_main_inline_keyboard())
+    except Exception:
+        pass
+    await callback.answer()
 
