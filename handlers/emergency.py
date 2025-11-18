@@ -24,7 +24,7 @@ async def handle_emergency(callback: CallbackQuery, state: FSMContext):
         if not number:
             continue
         lines.append(f"{name}")
-        lines.append(f"☎️ <code>{number}</code>")
+        lines.append(f"☎️ {number}")
         lines.append("")  # пустая строка-разделитель
 
     text = "\n".join(lines).rstrip()
