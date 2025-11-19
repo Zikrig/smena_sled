@@ -84,15 +84,16 @@ async def finish_tmc(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
+    time_lines = "\n".join(f"{idx}. {t}" for idx, t in enumerate(times, start=1)) or "—"
     header = (
         f"📋 <b>Передача ТМЦ на посту</b>\n"
         f"📅 Дата: {datetime.now().strftime('%d.%m.%Y')}\n"
         f"📝 Журнал передачи смены: [альбом]\n"
         f"📸 Количество фото: {photos_count}\n"
         f"\n"
-        f"🕒 Время:\n" + "\n".join(times)
+        f"🕒 Время:\n{time_lines}"
     )
-    await stamp_and_send_album(
+    sent_message_ids = await stamp_and_send_album(
         bot=callback.message.bot,
         chat_id=chat_id,
         file_ids=photos,
@@ -118,6 +119,7 @@ async def finish_tmc(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
     short = get_user_group_shortname(callback.from_user.id)
+    album_message_id = sent_message_ids[0] if sent_message_ids else None
     if short:
         await gsheets.log_event(
             shortname=short,
@@ -125,7 +127,7 @@ async def finish_tmc(callback: CallbackQuery, state: FSMContext):
             event_type="Передача ТМЦ",
             author_full_name=callback.from_user.full_name,
             author_username=callback.from_user.username,
-            message_id=None,
+            message_id=album_message_id,
             text=f"Количество фото: {photos_count}"
         )
 

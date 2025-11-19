@@ -58,7 +58,7 @@ def get_problem_type_keyboard():
     builder.adjust(2, 2, 1, 1)
     return builder.as_markup()
 
-# keyboards.py
+# Клавиатура управления обходом
 def get_patrol_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Завершить обход", callback_data="finish_patrol")

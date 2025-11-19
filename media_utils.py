@@ -18,21 +18,23 @@ async def stamp_and_send_album(
     parse_mode: Optional[ParseMode] = None,
     captions: Optional[List[Optional[str]]] = None,
     header: Optional[str] = None,
-    kinds: Optional[List[str]] = None,  # 'photo' or 'video' per item; default all 'photo'
-) -> None:
+    kinds: Optional[List[str]] = None,  # «photo» или «video» для каждого элемента; по умолчанию все «photo»
+) -> List[int]:
     """
-    Downloads photos by file_ids, stamps date/time on each, and sends as media groups (chunks of 10).
-    Caption is added only to the first item of the first group.
+    Загружает медиа по file_id, ставит штамп даты/времени и отправляет альбомами (до 10 элементов).
+    Общая подпись добавляется только к первому элементу первого альбома.
+    Возвращает список message_id отправленных медиа (по порядку).
     """
     if not file_ids:
         return
     tmp_dir = tempfile.mkdtemp()
-    stamped_paths: List[Optional[str]] = []  # path for photos, None for videos
+    stamped_paths: List[Optional[str]] = []  # путь для фото, None для видео
+    sent_message_ids: List[int] = []
     try:
         for idx, fid in enumerate(file_ids):
             kind = (kinds[idx] if kinds and idx < len(kinds) else "photo").lower()
             if kind == "video":
-                # For videos we don't stamp, keep placeholder
+                # Видео не штампуем — сохраняем заглушку
                 stamped_paths.append(None)
                 continue
             in_path = os.path.join(tmp_dir, f"in_{fid}.jpg")
@@ -43,18 +45,18 @@ async def stamp_and_send_album(
             ImageProcessor.add_text_with_outline(in_path, out_path, date_text)
             stamped_paths.append(out_path)
 
-        # Send in chunks of up to 10
+        # Отправляем блоками максимум по 10 элементов
         first = True
         for i in range(0, len(stamped_paths), 10):
             chunk = stamped_paths[i:i + 10]
             media = []
             for idx, p in enumerate(chunk):
                 absolute_index = i + idx
-                # Determine per-item caption
+                # Определяем подпись для конкретного элемента
                 item_caption: Optional[str] = None
                 if captions and absolute_index < len(captions):
                     item_caption = captions[absolute_index]
-                # Apply header to the very first item
+                # Шапку добавляем только к самому первому элементу
                 if first and idx == 0:
                     if header and item_caption:
                         item_caption = f"{header}\n{item_caption}"
@@ -62,7 +64,7 @@ async def stamp_and_send_album(
                         item_caption = header
                     elif not header and caption:
                         item_caption = caption
-                # Select media type
+                # Определяем тип медиа
                 kind = (kinds[absolute_index] if kinds and absolute_index < len(kinds) else "photo").lower()
                 if kind == "video":
                     media.append(InputMediaVideo(
@@ -76,10 +78,11 @@ async def stamp_and_send_album(
                         caption=item_caption,
                         parse_mode=parse_mode if item_caption else None
                     ))
-            await bot.send_media_group(chat_id=chat_id, media=media)
+            sent_messages = await bot.send_media_group(chat_id=chat_id, media=media)
+            sent_message_ids.extend(msg.message_id for msg in sent_messages)
             first = False
     finally:
-        # Cleanup temp files
+        # Удаляем временные файлы
         try:
             for name in os.listdir(tmp_dir):
                 try:
@@ -90,72 +93,9 @@ async def stamp_and_send_album(
         except Exception:
             pass
 
+    return sent_message_ids
 
-# Simple in-memory buffers for incoming Telegram media groups
+
+# Простые буферы в памяти для входящих альбомов Telegram
 _ALBUM_BUFFERS: Dict[Tuple[int, str], Dict] = {}
-
-
-async def queue_album_photo(
-    bot,
-    chat_id: int,
-    media_group_id: str,
-    file_id: str,
-    photo_caption: Optional[str],
-    header_template: str,
-    include_date: bool,
-    parse_mode: Optional[ParseMode] = None,
-    delay_seconds: float = 0.8,
-):
-    """
-    Queue a photo belonging to a Telegram media group; after a short delay,
-    all photos with the same media_group_id will be sent as an album with per-photo captions.
-    header_template supports {time}, {date}, {count} placeholders.
-    """
-    key = (chat_id, media_group_id)
-    buf = _ALBUM_BUFFERS.get(key)
-    if not buf:
-        buf = {
-            "files": [],
-            "captions": [],
-            "header_template": header_template,
-            "include_date": include_date,
-            "parse_mode": parse_mode,
-            "bot": bot,
-            "chat_id": chat_id,
-            "flushing": False,
-        }
-        _ALBUM_BUFFERS[key] = buf
-    buf["files"].append(file_id)
-    buf["captions"].append(photo_caption)
-
-    # Schedule flush if not already scheduled
-    if not buf["flushing"]:
-        buf["flushing"] = True
-
-        async def _flush():
-            await asyncio.sleep(delay_seconds)
-            current = _ALBUM_BUFFERS.pop(key, None)
-            if not current:
-                return
-            files = current["files"]
-            caps = current["captions"]
-            now = datetime.now()
-            time_str = now.strftime("%H:%M")
-            date_str = now.strftime("%d.%m.%Y")
-            header = current["header_template"].format(
-                time=time_str,
-                date=date_str if include_date else "",
-                count=len(files),
-            )
-            await stamp_and_send_album(
-                bot=current["bot"],
-                chat_id=current["chat_id"],
-                file_ids=files,
-                captions=caps,
-                header=header,
-                parse_mode=current["parse_mode"],
-            )
-
-        asyncio.create_task(_flush())
-
 

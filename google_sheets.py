@@ -52,9 +52,9 @@ class SheetsClient:
         try:
             ws = await asyncio.to_thread(self._spreadsheet.worksheet, shortname)
         except Exception:
-            # Create if not exists
+            # Создаём лист, если он ещё не существует
             ws = await asyncio.to_thread(self._spreadsheet.add_worksheet, title=shortname, rows=1000, cols=10)
-            # Write headers
+            # Записываем заголовки
             headers = ["Дата", "Время", "Событие", "Автор", "Ссылка на пост", "Текст"]
             await asyncio.to_thread(ws.append_row, headers)
 
@@ -68,8 +68,8 @@ class SheetsClient:
 
     @staticmethod
     def build_message_link(chat_id: int, message_id: int) -> str:
-        # Works for private groups without username: https://t.me/c/<id>/<message_id>
-        # where <id> is channel/group id without -100 prefix
+        # Работает для закрытых групп без username: https://t.me/c/<id>/<message_id>
+        # где <id> — идентификатор канала/группы без префикса -100
         try:
             cid = str(chat_id)
             if cid.startswith("-100"):

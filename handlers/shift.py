@@ -45,7 +45,7 @@ async def handle_video_note(message: Message, state: FSMContext):
         "✅ Начало смены зафиксировано! Кружочек отправлен в группу.",
         reply_markup=get_main_inline_keyboard()
     )
-    # Log to Google Sheets
+    # Логируем в Google Таблицу
     short = get_user_group_shortname(message.from_user.id)
     if short:
         await gsheets.log_event(

@@ -2,7 +2,7 @@ import json
 import os
 from typing import Dict, Optional, Tuple
 
-# Paths
+# Пути к файлам
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, "data")
 GROUPS_FILE = os.path.join(DATA_DIR, "groups.json")
@@ -24,7 +24,7 @@ def _read_json(path: str, default):
     except FileNotFoundError:
         return default
     except json.JSONDecodeError:
-        # Corrupted file: back up and reset
+        # Повреждённый файл: создаём резервную копию и сбрасываем
         try:
             os.replace(path, f"{path}.bak")
         except Exception:
@@ -59,7 +59,7 @@ def _save_users(users: Dict[str, str]) -> None:
     _write_json(USERS_FILE, users)
 
 
-# Group management
+# Управление группами
 def list_groups() -> Dict[str, Dict]:
     return _load_groups()
 
@@ -113,7 +113,7 @@ def remove_group_by_chat_id(chat_id: int) -> bool:
     return False
 
 
-# User to group mapping
+# Связка пользователя с группой
 def set_user_group(user_id: int, shortname: str) -> bool:
     groups = _load_groups()
     if shortname not in groups:
@@ -144,7 +144,7 @@ def get_chat_id_for_user(user_id: int) -> Optional[int]:
     chat_id = get_user_group_chat_id(user_id)
     if chat_id is not None:
         return chat_id
-    # Fallback to single-group mode if configured
+    # Резервный режим: один общий чат, если указан в настройках
     try:
         from config import GROUP_ID
     except Exception:

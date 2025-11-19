@@ -22,12 +22,12 @@ async def cmd_start_in_group(message: Message, state: FSMContext):
         await message.reply("❌ У вас нет доступа к этой команде в группе. Используйте бота в личных сообщениях.")
         return
     # Для админов в группе ничего не делаем (или можно подсказать про /admin)
-    # await message.reply("Откройте админ-панель командой /admin")
+    # Пример ответа: await message.reply("Откройте админ-панель командой /admin")
 
 @router.message(CommandStart(), F.chat.type == "private")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
-    # Deep-link payload handling: /start <shortname>
+    # Обрабатываем deep-link вида /start <shortname>
     try:
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) > 1:
@@ -119,7 +119,7 @@ async def handle_location(message: Message, state: FSMContext):
             "Выберите действие:",
             reply_markup=get_main_inline_keyboard()
         )
-        # Log to Google Sheets
+        # Логируем в Google Таблицу
         short = get_user_group_shortname(message.from_user.id)
         if short:
             coords = f"{message.location.latitude}, {message.location.longitude}"

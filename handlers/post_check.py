@@ -64,7 +64,7 @@ async def handle_post_check_video(message: Message, state: FSMContext):
         "✅ Проверка поста зафиксирована! Видео отправлено в группу.",
         reply_markup=get_main_inline_keyboard()
     )
-    # Log
+    # Логируем
     short = get_user_group_shortname(message.from_user.id)
     if short:
         await gsheets.log_event(

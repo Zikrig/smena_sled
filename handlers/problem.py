@@ -67,7 +67,7 @@ async def handle_problem_message(message: Message, state: FSMContext):
                         f"📅 Дата: {datetime.now().strftime('%d.%m.%Y')}\n"
                         f"📎 Медиа: [альбом]"
                     )
-                    await stamp_and_send_album(
+                    sent_ids = await stamp_and_send_album(
                         bot=message.bot,
                         chat_id=chat_id,
                         file_ids=files2,
@@ -95,40 +95,42 @@ async def handle_problem_message(message: Message, state: FSMContext):
                     )
                     short = get_user_group_shortname(message.from_user.id)
                     if short:
+                        album_mid = sent_ids[0] if sent_ids else status_msg.message_id
                         await gsheets.log_event(
                             shortname=short,
                             chat_id=chat_id,
                             event_type="Сообщение (альбом)",
                             author_full_name=message.from_user.full_name,
                             author_username=message.from_user.username,
-                            message_id=None,
+                            message_id=album_mid,
                             text=f"Медиа: {len(files2)}"
                         )
                 asyncio.create_task(_flush())
             return
-        # Single media
+        # Одиночное медиа
         header = (
             f"💬 <b>СООБЩЕНИЕ</b>\n"
             f"⏰ Время: {current_time}\n"
             f"📅 Дата: {current_date}\n"
             f"📎 Медиа: [прикреплено]"
         )
+        media_caption = message.caption or None
         if message.photo:
-            await stamp_and_send_album(
+            sent_ids = await stamp_and_send_album(
                 bot=message.bot,
                 chat_id=chat_id,
                 file_ids=[message.photo[-1].file_id],
-                captions=[message.caption or None],
+                captions=[media_caption],
                 header=header,
                 kinds=["photo"],
                 parse_mode=ParseMode.HTML
             )
         else:
-            await stamp_and_send_album(
+            sent_ids = await stamp_and_send_album(
                 bot=message.bot,
                 chat_id=chat_id,
                 file_ids=[message.video.file_id],
-                captions=[message.caption or None],
+                captions=[media_caption],
                 header=header,
                 kinds=["video"],
                 parse_mode=ParseMode.HTML
@@ -150,6 +152,18 @@ async def handle_problem_message(message: Message, state: FSMContext):
             "✅ Сообщение с медиа отправлено!",
             reply_markup=get_main_inline_keyboard()
         )
+        short = get_user_group_shortname(message.from_user.id)
+        if short:
+            album_mid = sent_ids[0] if sent_ids else status_msg.message_id
+            await gsheets.log_event(
+                shortname=short,
+                chat_id=chat_id,
+                event_type="Сообщение (медиа)",
+                author_full_name=message.from_user.full_name,
+                author_username=message.from_user.username,
+                message_id=album_mid,
+                text=media_caption or ""
+            )
         return
     
     # Пересылаем прочие медиа/текст сразу
@@ -281,11 +295,11 @@ async def handle_problem_message(message: Message, state: FSMContext):
         reply_markup=get_main_inline_keyboard()
     )
 
-    # Log (choose first available message id variable)
+    # Логируем (берём первый доступный message_id — предпочитаем исходное медиа)
     short = get_user_group_shortname(message.from_user.id)
     if short:
         mid = None
-        for var in ["sent_photo", "sent_video", "info", "sent_text", "sent_doc", "fwd", "fwd_other", "info_other"]:
+        for var in ["sent_photo", "sent_video", "sent_text", "sent_doc", "fwd", "fwd_other", "info", "info_other"]:
             if var in locals() and locals()[var]:
                 try:
                     mid = locals()[var].message_id

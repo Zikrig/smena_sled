@@ -40,7 +40,7 @@ def _admin_group_menu(is_bound: bool, shortname: str | None):
 @router.message(Command("admin"))
 async def admin_entry(message: Message, state: FSMContext):
     await state.clear()
-    # Private admin panel
+    # Личная админ-панель
     if message.chat.type == "private":
         if ADMIN_IDS and message.from_user.id not in ADMIN_IDS:
             await message.answer("Доступ запрещён.")
@@ -48,7 +48,7 @@ async def admin_entry(message: Message, state: FSMContext):
         await message.answer("Админ-панель", reply_markup=_admin_main_menu_private())
         return
 
-    # Group context: checks can be enforced or disabled by config
+    # Контекст группы: проверки можно включить или отключить в конфиге
     if message.chat.type in ("group", "supergroup"):
         if GROUP_ADMIN_ENFORCE:
             user_member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
@@ -134,7 +134,7 @@ async def admin_remove_group(callback: CallbackQuery):
 
 @router.callback_query(F.data == "admin_bind_here")
 async def admin_bind_here(callback: CallbackQuery, state: FSMContext):
-    # In group context; checks can be enforced or disabled
+    # В групповом чате; проверки могут быть включены или отключены
     if callback.message.chat.type not in ("group", "supergroup"):
         await callback.answer()
         return

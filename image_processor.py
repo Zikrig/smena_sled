@@ -34,7 +34,7 @@ class ImageProcessor:
                     "arial.ttf",
                     "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
                     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                    "/System/Library/Fonts/SFNSDisplay.ttf"  # macOS
+                    "/System/Library/Fonts/SFNSDisplay.ttf"
                 ]
                 
                 # Подбираем размер шрифта, чтобы текст помещался в половину ширины

@@ -8,7 +8,7 @@ from states import Form
 from keyboards import get_cancel_keyboard, get_main_inline_keyboard, get_patrol_keyboard
 from datetime import datetime
 from aiogram.types import FSInputFile
-from media_utils import stamp_and_send_album, queue_album_photo
+from media_utils import stamp_and_send_album
 import asyncio
 
 router = Router()
@@ -89,15 +89,16 @@ async def handle_finish_patrol(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
+    time_lines = "\n".join(f"{idx}. {t}" for idx, t in enumerate(times, start=1)) or "—"
     header = (
         f"🚶 <b>Обход объекта</b>\n"
         f"📅 Дата: {datetime.now().strftime('%d.%m.%Y')}\n"
         f"📸 Количество фото: {photos_count}\n"
         f"📎 Обход территории: [альбом]\n"
         f"\n"
-        f"🕒 Время:\n" + "\n".join(times)
+        f"🕒 Время:\n{time_lines}"
     )
-    await stamp_and_send_album(
+    sent_message_ids = await stamp_and_send_album(
         bot=callback.message.bot,
         chat_id=chat_id,
         file_ids=photos,
@@ -124,8 +125,9 @@ async def handle_finish_patrol(callback: CallbackQuery, state: FSMContext):
     except Exception:
         pass
     await callback.answer()
-    # Log
+    # Логируем
     short = get_user_group_shortname(callback.from_user.id)
+    album_message_id = sent_message_ids[0] if sent_message_ids else None
     if short:
         await gsheets.log_event(
             shortname=short,
@@ -133,7 +135,7 @@ async def handle_finish_patrol(callback: CallbackQuery, state: FSMContext):
             event_type="Обход",
             author_full_name=callback.from_user.full_name,
             author_username=callback.from_user.username,
-            message_id=None,
+            message_id=album_message_id,
             text=f"Количество фото: {photos_count}"
         )
 
