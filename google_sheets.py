@@ -72,8 +72,8 @@ class SheetsClient:
         # где <id> — идентификатор канала/группы без префикса -100
         try:
             cid = str(chat_id)
-            if cid.startswith("-100"):
-                cid = cid[4:]
+            if cid.startswith("-"):
+                cid = cid[1:]
             return f"https://t.me/c/{cid}/{message_id}"
         except Exception:
             return ""
