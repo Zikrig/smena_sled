@@ -74,6 +74,8 @@ class SheetsClient:
             cid = str(chat_id)
             if cid.startswith("-"):
                 cid = cid[1:]
+            if cid.startswith("100"):
+                cid = cid[3:]
             return f"https://t.me/c/{cid}/{message_id}"
         except Exception:
             return ""
